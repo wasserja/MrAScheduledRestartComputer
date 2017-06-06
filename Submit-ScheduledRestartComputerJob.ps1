@@ -99,18 +99,40 @@ Stop-Transcript
             
             try {
                 # Writing the $Script out to a file to be executed by the scheduled job.
+                Write-Verbose -Message "Creating Restart Computer Job Script file $ScriptFIleFullPath"
                 Write-Output $Script | Out-File $ScriptFileFullPath -NoClobber
                 
                 # Creating the job trigger
+                Write-Verbose -Message "Creating Job Trigger for $RestartDateTime"
                 $Trigger = New-JobTrigger -Once -At $RestartDateTime
                 
-                # Create
-                $Job = Register-ScheduledJob -Name $JobName -FilePath $ScriptFileFullPath -Trigger $Trigger -Credential $Credential
-                #$Job
-                Get-ScheduledRestartComputerJob | Where-Object -FilterScript {$_.Name -eq $Job.Name}                
+                # Create Restart-Computer Job
+                Write-Verbose -Message "Creating PowerShell Scheduled Job $JobName"
+                $ScheduledRestartComputerJob = Register-ScheduledJob -Name $JobName -FilePath $ScriptFileFullPath -Trigger $Trigger -Credential $Credential -ErrorAction Stop -ErrorVariable JobError
+                
+                # Retreive Newly created job
+                # There appears to be a bug in PowerShell where if you provide an invalid or unauthorized credential it doesn't
+                # throw an error. It does work when running via the PowerShell command line, but not as part of a script.
+                Write-Verbose -Message "Checking to see if $JobName was successfully created."
+                $Job = Get-ScheduledRestartComputerJob -Name $JobName
+                if ($Job) {
+                    Write-Verbose -Message "$($Job.Name) has been scheduled for $($Job.JobTrigger)"
+                    $Job
+                    }
+                else {
+                    Write-Error -Message "$JobName was not registered."
+                    }
+                
+                }
+            catch [System.IO.IOException] {
+                Write-Error -Message "$($_.Exception.Message)"
+                }
+            catch [Microsoft.PowerShell.ScheduledJob.ScheduledJobException] {
+                Write-Error -Message $JobError.ErrorRecord.Exception.Message
                 }
             catch {
-                Write-Output $Error[0].Exception.Message
+                Write-Warning -Message 'Error exception caught.'
+                Write-Error "$($_.Exception.Message)"
                 }    
     
     }
